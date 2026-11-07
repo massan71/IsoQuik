@@ -105,6 +105,7 @@ IsoQuik/
 ├── build.sh
 ├── test.sh
 ├── CHANGELOG.md
+├── LICENSE
 └── Makefile
 ```
 
@@ -152,6 +153,8 @@ xattr -dr com.apple.quarantine build/IsoQuik.app
 **The administrator password is rejected or cancelled**
 Nothing is written. Try again and approve the macOS prompt.
 
-## Legal note
+## License
+
+IsoQuik is released under the [MIT License](LICENSE).
 
 Only use the app on media you own and with images you have the rights to. Raw writing is irreversible.
