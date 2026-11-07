@@ -52,7 +52,7 @@ build number) and in **IsoQuik → About IsoQuik**. Record every release in `CHA
 3. Keep **Verify after writing** enabled (recommended).
 4. Click **Write**: an irreversible-action confirmation appears, then the administrator password prompt.
    The app unmounts the disk, writes, verifies and ejects.
-5. Technical details are shown in the **Technical Details** panel.
+5. Technical details (unmount, authorization, sector size, verification) are shown in the **Console** panel.
 
 > `.dmg` files are written as is, without decompression: for a bootable drive, prefer `.iso` or `.img`.
 

@@ -390,7 +390,7 @@ struct ContentView: View {
 
             DisclosureGroup(isExpanded: $showLog) {
                 ScrollView {
-                    Text(model.logText.isEmpty ? "No details yet." : model.logText)
+                    Text(model.logText.isEmpty ? "No output yet." : model.logText)
                         .font(.system(.caption, design: .monospaced))
                         .foregroundStyle(Theme.textSecondary)
                         .textSelection(.enabled)
@@ -407,7 +407,7 @@ struct ContentView: View {
                         .strokeBorder(Theme.cardBorder, lineWidth: 1)
                 }
             } label: {
-                Label("Technical Details", systemImage: "terminal")
+                Label("Console", systemImage: "terminal")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Theme.textSecondary)
             }

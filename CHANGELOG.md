@@ -2,6 +2,11 @@
 
 All notable changes to IsoQuik are listed here. Versions follow [semantic versioning](https://semver.org).
 
+## [Unreleased]
+
+### Changed
+- The "Technical Details" panel is now called "Console".
+
 ## [1.1.0] (build 2) — 2026-11-06
 
 ### Changed
