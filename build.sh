@@ -3,7 +3,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ARCH="${ARCH:-$(uname -m)}"
+# ARCH=universal (default) builds arm64 + x86_64; ARCH=arm64 or ARCH=x86_64 builds one slice.
+ARCH="${ARCH:-universal}"
 APP="$ROOT/build/IsoQuik.app"
 
 # With only the Command Line Tools, SDK 27 lacks the SwiftUIMacros plugin
@@ -32,15 +33,31 @@ SOURCES=(
     "$ROOT"/Sources/Services/*.swift
 )
 
+if [ "$ARCH" = "universal" ]; then
+    SLICES=(arm64 x86_64)
+else
+    SLICES=("$ARCH")
+fi
+
+OBJ="$ROOT/build/slices"
+rm -rf "$OBJ"
+mkdir -p "$OBJ"
+
 echo "Building IsoQuik ${VERSION} (${BUILD}) for ${ARCH} (macOS 14+)…"
-swiftc \
-    -O \
-    -parse-as-library \
-    -swift-version 5 \
-    -sdk "$SDK" \
-    -target "${ARCH}-apple-macos14.0" \
-    "${SOURCES[@]}" \
-    -o "$APP/Contents/MacOS/IsoQuik"
+for slice in "${SLICES[@]}"; do
+    echo "  ${slice}"
+    swiftc \
+        -O \
+        -parse-as-library \
+        -swift-version 5 \
+        -sdk "$SDK" \
+        -target "${slice}-apple-macos14.0" \
+        "${SOURCES[@]}" \
+        -o "$OBJ/IsoQuik-${slice}"
+done
+
+lipo -create "$OBJ"/IsoQuik-* -output "$APP/Contents/MacOS/IsoQuik"
+rm -rf "$OBJ"
 
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 if [ -f "$ROOT/Resources/AppIcon.icns" ]; then

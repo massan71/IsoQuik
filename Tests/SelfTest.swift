@@ -34,6 +34,13 @@ struct SelfTest {
             print("No image given: skipping the ISO test.")
         }
 
+        #if arch(arm64)
+        let slice = "arm64"
+        #else
+        let slice = "x86_64"
+        #endif
+        print("Host: \(HostMachine.isAppleSilicon ? "Apple silicon" : "Intel"), running \(slice)")
+
         let targets = await DriveService.rawTargets()
         print("Writable external drives: \(targets.count)")
         for target in targets {

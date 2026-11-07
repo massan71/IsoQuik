@@ -2,6 +2,12 @@
 
 All notable changes to IsoQuik are listed here. Versions follow [semantic versioning](https://semver.org).
 
+## [1.2.1] (build 4) — 2026-11-07
+
+### Changed
+- Universal build: one app runs natively on Apple silicon and Intel Macs. `build.sh` builds both slices
+  by default; `ARCH=arm64` or `ARCH=x86_64` builds a single one.
+
 ## [1.2.0] (build 3) — 2026-11-07
 
 ### Added

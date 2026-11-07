@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ARCH="$(uname -m)"
+ARCH="${ARCH:-$(uname -m)}"
 OUT="$ROOT/build"
 
 if [ -z "${SDK:-}" ]; then

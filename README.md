@@ -1,8 +1,8 @@
 # IsoQuik
 
-**Version 1.2.0** — see [CHANGELOG.md](CHANGELOG.md).
+**Version 1.2.1** — see [CHANGELOG.md](CHANGELOG.md).
 
-A native macOS app (SwiftUI, Apple Silicon) that writes disk images to **USB drives and SD cards** in raw mode.
+A native macOS app (SwiftUI, universal: Apple silicon and Intel) that writes disk images to **USB drives and SD cards** in raw mode.
 
 No external dependencies, no network access, no telemetry.
 
@@ -33,7 +33,7 @@ The app is created in `build/IsoQuik.app`, ad-hoc signed and ready for local use
 > CLT. If full Xcode is installed, the script uses Xcode's default SDK automatically.
 > You can force an SDK with `SDK=/path/to/MacOSX.sdk ./build.sh`.
 
-To build for Intel: `ARCH=x86_64 ./build.sh`.
+The app is built as a universal binary (arm64 + x86_64). To build a single architecture: `ARCH=arm64 ./build.sh` or `ARCH=x86_64 ./build.sh`.
 
 ## Versioning
 
