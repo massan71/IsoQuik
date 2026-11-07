@@ -1,0 +1,9 @@
+# Build output
+build/
+*.dSYM/
+
+# Release archives
+*.zip
+
+# macOS
+.DS_Store
