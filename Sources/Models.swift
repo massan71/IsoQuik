@@ -6,6 +6,7 @@ struct ISOInfo: Equatable {
     let volumeLabel: String?
     let isISO9660: Bool
     let isUDF: Bool
+    let boot: BootInfo
 
     var formattedSize: String {
         ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
@@ -29,6 +30,21 @@ struct RawTarget: Identifiable, Hashable {
     var formattedSize: String {
         ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
     }
+
+    /// Volume names for display ("/Volumes/PVE" → "PVE").
+    var volumeNames: [String] {
+        volumes.map { $0.hasPrefix("/") ? URL(fileURLWithPath: $0).lastPathComponent : $0 }
+    }
+
+    /// Best guess: built-in SD slot, or a reader that names itself as such.
+    var isSDCard: Bool {
+        let text = (bus + " " + name).lowercased()
+        return text.contains("secure digital")
+            || text.contains("sdxc")
+            || text.contains("sdhc")
+            || text.contains("sd card")
+            || text.contains("card reader")
+    }
 }
 
 enum BurnPhase: Equatable {
@@ -39,6 +55,7 @@ enum BurnPhase: Equatable {
     case ejecting
     case done
     case cancelled
+    case stopped
     case failed(String)
 
     var isBusy: Bool {

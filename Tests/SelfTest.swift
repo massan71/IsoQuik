@@ -15,6 +15,17 @@ struct SelfTest {
                 print("  ISO 9660: \(info.isISO9660)")
                 print("  UDF:      \(info.isUDF)")
                 print("  format:   \(info.formatLabel)")
+                let boot = info.boot
+                print("  MBR/GPT:  \(boot.hasMBR)/\(boot.hasGPT)")
+                print("  El Torito BIOS/UEFI: \(boot.elToritoBIOS)/\(boot.elToritoEFI)")
+                print("  UEFI loaders: \(boot.efiArchitectures.sorted().map(\.efiLoader).joined(separator: ", "))")
+                print("  from name:    \(boot.nameArchitectures.sorted().map(\.displayName).joined(separator: ", "))")
+                print("  boot:     \(BootAdvisor.summary(for: info) ?? "-")")
+                for (host, appleSilicon) in [("Apple silicon", true), ("Intel Mac", false)] {
+                    for notice in BootAdvisor.notices(for: info, appleSilicon: appleSilicon) {
+                        print("  [\(host)] \(notice.level == .warning ? "WARNING" : "info"): \(notice.text)")
+                    }
+                }
             } catch {
                 print("ERROR image: \(error.localizedDescription)")
                 failed = true

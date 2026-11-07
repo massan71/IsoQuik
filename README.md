@@ -47,12 +47,24 @@ build number) and in **IsoQuik → About IsoQuik**. Record every release in `CHA
 
 ## Usage
 
-1. Drag an `.iso`, `.img` or `.dmg` file onto the left area, or click **Choose Image…**.
-2. Select the USB drive or SD card as the destination. Virtual disks, disk images and the startup disk are excluded.
-3. Keep **Verify after writing** enabled (recommended).
-4. Click **Write**: an irreversible-action confirmation appears, then the administrator password prompt.
-   The app unmounts the disk, writes, verifies and ejects.
-5. Technical details (unmount, authorization, sector size, verification) are shown in the **Console** panel.
+1. Drag an `.iso`, `.img` or `.dmg` file onto the left area, or click **Choose Image…** (⌘O).
+2. The app shows how the image boots (for example *UEFI x86-64 · BIOS · bootable from USB*) and warns when
+   the drive will not boot: ISOs that only boot from CD/DVD (such as Windows ISOs), images that are not
+   bootable at all, and images built for another kind of computer. Macs with Apple silicon cannot start
+   any system other than macOS from a USB drive, so IsoQuik says so for bootable images.
+3. The app computes the image's **SHA-256**. Paste the checksum published by the image's
+   distributor (a bare hash or a `SHA256SUMS` line) to check that the file is intact.
+4. Select the USB drive or SD card as the destination. Each drive shows its device, size, bus and current volumes.
+   Virtual disks, disk images and the startup disk are excluded.
+5. Keep **Verify after writing** enabled (recommended).
+6. Click **Write** (⌘↩): a confirmation shows the image, the drive and the volumes that will be erased,
+   then macOS asks for the administrator password. The app unmounts the disk, writes, verifies and ejects.
+7. During the operation the footer shows throughput and time remaining, and the Dock icon shows the percentage.
+   You get a notification when it finishes while the app is in the background.
+8. **Stop** (⌘.) interrupts writing (the drive is left incomplete, so it asks first) or verification.
+9. The **Console** panel logs every step with a timestamp; **Copy** puts the log on the clipboard.
+
+While an operation is running, the window cannot be closed and quitting asks for confirmation.
 
 > `.dmg` files are written as is, without decompression: for a bootable drive, prefer `.iso` or `.img`.
 
@@ -68,7 +80,7 @@ A raw write permanently erases all data on the selected disk. For this reason:
 - it shows an explicit confirmation before starting;
 - the disk is unmounted with `diskutil unmountDisk force` before writing; if unmounting fails, the write does not start;
 - verification reads the drive back and compares it byte by byte with the original image, using the same file descriptor as the write;
-- the raw operation **cannot be cancelled** once started.
+- writing can be stopped, but a stopped write leaves the drive incomplete: write it again or erase it with Disk Utility.
 
 Raw device access goes through `/usr/libexec/authopen`, the macOS tool that opens the device after administrator authorization and hands the file descriptor to the app via `SCM_RIGHTS`. As a result:
 
@@ -93,6 +105,7 @@ IsoQuik/
 │       ├── Shell.swift          # command execution
 │       ├── DriveService.swift   # external disk discovery, startup disk detection
 │       ├── ISOInspector.swift   # ISO 9660 / Joliet / UDF label reading
+│       ├── BootInspector.swift  # partition table, El Torito, UEFI loaders, boot warnings
 │       └── RawWriter.swift      # raw write via authopen
 ├── Resources/
 │   ├── Info.plist               # bundle metadata and version
@@ -118,7 +131,7 @@ IsoQuik/
 The test:
 
 1. builds a self-test executable;
-2. checks image parsing (size, label, ISO 9660/UDF);
+2. checks image parsing (size, label, ISO 9660/UDF) and boot detection (MBR/GPT, El Torito, UEFI loaders, warnings for Apple silicon and Intel Macs);
 3. lists the writable external drives;
 4. checks startup disk detection (including the physical disk behind the APFS container) and that it never appears as a destination.
 

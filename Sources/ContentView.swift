@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
     @State private var showRawConfirm = false
+    @State private var showStopConfirm = false
     @State private var pendingRawTarget: RawTarget?
     @State private var showLog = false
     @State private var isDropHovering = false
@@ -19,16 +20,13 @@ struct ContentView: View {
 
                 ScrollView {
                     HStack(alignment: .top, spacing: 18) {
-                        VStack(spacing: 18) {
-                            isoPanel
-                            optionsPanel
-                        }
-                        .frame(maxWidth: .infinity, alignment: .top)
+                        isoPanel
+                            .frame(maxWidth: .infinity, alignment: .top)
 
                         destinationPanel
-                            .frame(width: 400)
+                            .frame(width: 350)
                     }
-                    .padding(24)
+                    .padding(20)
                 }
                 .scrollIndicators(.hidden)
 
@@ -36,7 +34,8 @@ struct ContentView: View {
                 footer
             }
         }
-        .frame(minWidth: 980, minHeight: 700)
+        .frame(minWidth: 820, minHeight: 600)
+        .background(WindowCloseGuard(isBlocked: model.phase.isBusy))
         .onDrop(of: [.fileURL], isTargeted: $model.isDropTargeted) { providers in
             handleDrop(providers)
         }
@@ -62,7 +61,7 @@ struct ContentView: View {
             Text(model.errorMessage ?? "")
         }
         .confirmationDialog(
-            "Write the image to \(pendingRawTarget?.name ?? "disk")?",
+            "Erase \(pendingRawTarget?.name ?? "the drive") and write the image?",
             isPresented: $showRawConfirm,
             titleVisibility: .visible
         ) {
@@ -76,11 +75,46 @@ struct ContentView: View {
                 pendingRawTarget = nil
             }
         } message: {
+            Text(confirmationMessage)
+        }
+        .confirmationDialog(
+            "Stop writing?",
+            isPresented: $showStopConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Keep Writing", role: .cancel) {}
+            Button("Stop Writing", role: .destructive) {
+                model.stop()
+            }
+        } message: {
             Text(
-                "All data on \(pendingRawTarget?.device ?? "the disk") will be permanently erased. "
-                + "This cannot be undone."
+                "\(model.selectedRaw?.name ?? "The drive") will be left incomplete and unusable "
+                + "until you write it again or erase it with Disk Utility."
             )
         }
+    }
+
+    private var confirmationMessage: String {
+        guard let target = pendingRawTarget else { return "" }
+        var lines: [String] = []
+        if let iso = model.iso {
+            lines.append("\(iso.url.lastPathComponent) (\(iso.formattedSize))")
+            lines.append("→ \(target.name) · \(target.device) · \(target.formattedSize)")
+        }
+        let volumes = target.volumeNames
+        if !volumes.isEmpty {
+            lines.append("")
+            lines.append("Volumes that will be erased: \(volumes.joined(separator: ", ")).")
+        }
+        if let iso = model.iso {
+            for notice in BootAdvisor.notices(for: iso) where notice.level == .warning {
+                lines.append("")
+                lines.append("⚠︎ \(notice.text)")
+            }
+        }
+        lines.append("")
+        lines.append("All data on the drive will be permanently erased. This cannot be undone.")
+        return lines.joined(separator: "\n")
     }
 
     // MARK: - Header
@@ -90,13 +124,14 @@ struct ContentView: View {
             Image(nsImage: NSApp.applicationIconImage)
                 .resizable()
                 .interpolation(.high)
-                .frame(width: 54, height: 54)
+                .frame(width: 50, height: 50)
                 .shadow(color: Theme.accent.opacity(0.35), radius: 12, x: 0, y: 5)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 10) {
                     Text("IsoQuik")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .font(.system(size: 26, weight: .bold, design: .rounded))
                         .foregroundStyle(Theme.titleGradient)
 
                     Text("USB / SD")
@@ -121,13 +156,6 @@ struct ContentView: View {
 
             Spacer()
 
-            if !model.rawTargets.isEmpty {
-                InfoPill(
-                    icon: "externaldrive.fill",
-                    text: "\(model.rawTargets.count) \(model.rawTargets.count == 1 ? "drive" : "drives")"
-                )
-            }
-
             Button {
                 Task { await model.refreshDevices() }
             } label: {
@@ -135,9 +163,10 @@ struct ContentView: View {
             }
             .buttonStyle(QuietButtonStyle())
             .disabled(model.isRefreshing || model.phase.isBusy)
+            .help("Refresh the list of drives (⌘R)")
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 18)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
     }
 
     // MARK: - Image
@@ -148,6 +177,19 @@ struct ContentView: View {
 
             if let iso = model.iso {
                 imageRow(iso)
+                ForEach(Array(BootAdvisor.notices(for: iso).enumerated()), id: \.offset) { _, notice in
+                    switch notice.level {
+                    case .warning: warningBox(notice.text)
+                    case .info: infoBox(notice.text)
+                    }
+                }
+                checksumBox
+                if selectedImageIsDMG {
+                    warningBox(
+                        "The .dmg file will be written as is, without decompressing it. "
+                        + "For a bootable drive, use an .iso or .img image."
+                    )
+                }
             } else {
                 dropZone
             }
@@ -160,12 +202,13 @@ struct ContentView: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(Theme.accentGradient)
-                    .frame(width: 48, height: 48)
+                    .frame(width: 46, height: 46)
                 Image(systemName: "doc.fill")
-                    .font(.system(size: 21, weight: .semibold))
+                    .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(.white)
             }
             .shadow(color: Theme.accent.opacity(0.30), radius: 8, x: 0, y: 4)
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(iso.url.lastPathComponent)
@@ -173,6 +216,7 @@ struct ContentView: View {
                     .foregroundStyle(Theme.textPrimary)
                     .lineLimit(1)
                     .truncationMode(.middle)
+                    .help(iso.url.path)
 
                 HStack(spacing: 7) {
                     Text(iso.formattedSize)
@@ -185,7 +229,16 @@ struct ContentView: View {
                 }
                 .font(.system(size: 11.5))
                 .foregroundStyle(Theme.textSecondary)
+
+                if let boot = BootAdvisor.summary(for: iso) {
+                    Label(boot, systemImage: "power")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.textSecondary)
+                        .lineLimit(1)
+                        .help("How this image starts a computer")
+                }
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -194,6 +247,7 @@ struct ContentView: View {
             }
             .buttonStyle(QuietButtonStyle())
             .disabled(model.phase.isBusy)
+            .help("Choose another image (⌘O)")
         }
         .padding(14)
         .background {
@@ -203,6 +257,94 @@ struct ContentView: View {
         .overlay {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(Theme.cardBorder, lineWidth: 1)
+        }
+    }
+
+    private var checksumBox: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 8) {
+                Text("SHA-256")
+                    .font(.system(size: 10.5, weight: .bold))
+                    .tracking(0.6)
+                    .foregroundStyle(Theme.textSecondary)
+
+                if let checksum = model.checksum {
+                    Text(checksum)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(Theme.textPrimary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
+                        .help(checksum)
+
+                    Spacer(minLength: 4)
+
+                    Button {
+                        copyToPasteboard(checksum)
+                    } label: {
+                        Image(systemName: "doc.on.doc")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Copy SHA-256")
+                    .accessibilityLabel("Copy SHA-256")
+                } else if let error = model.checksumError {
+                    Text(error)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.danger)
+                        .lineLimit(1)
+                    Spacer()
+                } else {
+                    Text("Computing…")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.textSecondary)
+                    if let fraction = model.checksumProgress {
+                        ProgressView(value: fraction)
+                            .progressViewStyle(.linear)
+                            .frame(maxWidth: 160)
+                            .tint(Theme.accent)
+                    }
+                    Spacer()
+                }
+            }
+
+            if model.checksum != nil {
+                HStack(spacing: 8) {
+                    TextField("Paste the published SHA-256 to compare", text: $model.expectedChecksum)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 11, design: .monospaced))
+
+                    checksumVerdict
+                }
+            }
+        }
+        .padding(12)
+        .background {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Theme.fieldFill.opacity(0.7))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Theme.cardBorder, lineWidth: 1)
+        }
+    }
+
+    @ViewBuilder
+    private var checksumVerdict: some View {
+        switch model.checksumMatch {
+        case .matches:
+            Label("Matches", systemImage: "checkmark.seal.fill")
+                .foregroundStyle(Theme.success)
+                .font(.system(size: 11.5, weight: .semibold))
+        case .differs:
+            Label("Does not match", systemImage: "xmark.octagon.fill")
+                .foregroundStyle(Theme.danger)
+                .font(.system(size: 11.5, weight: .semibold))
+        case .invalid:
+            Label("Not a SHA-256", systemImage: "questionmark.circle")
+                .foregroundStyle(Theme.warning)
+                .font(.system(size: 11.5, weight: .semibold))
+        case nil:
+            EmptyView()
         }
     }
 
@@ -219,12 +361,13 @@ struct ContentView: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(width: 84, height: 84)
+                    .frame(width: 80, height: 80)
 
                 Image(systemName: "arrow.down.doc.fill")
-                    .font(.system(size: 32, weight: .medium))
+                    .font(.system(size: 30, weight: .medium))
                     .foregroundStyle(Theme.accent)
             }
+            .accessibilityHidden(true)
 
             VStack(spacing: 4) {
                 Text("Drop your image here")
@@ -240,14 +383,17 @@ struct ContentView: View {
             }
             .buttonStyle(PrimaryButtonStyle())
             .disabled(model.phase.isBusy)
+            .help("Choose an image (⌘O)")
 
             HStack(spacing: 6) {
                 formatChip("ISO")
                 formatChip("IMG")
                 formatChip("DMG")
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Supported formats: ISO, IMG, DMG")
         }
-        .frame(maxWidth: .infinity, minHeight: 250)
+        .frame(maxWidth: .infinity, minHeight: 240)
         .background {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(active ? Theme.accent.opacity(0.08) : Theme.fieldFill.opacity(0.55))
@@ -277,41 +423,6 @@ struct ContentView: View {
             .foregroundStyle(Theme.textSecondary)
     }
 
-    // MARK: - Options
-
-    private var optionsPanel: some View {
-        VStack(alignment: .leading, spacing: 13) {
-            SectionHeader(icon: "slider.horizontal.3", title: "Options")
-
-            Toggle(isOn: $model.verify) {
-                HStack(spacing: 12) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .fill(Theme.accent.opacity(0.13))
-                            .frame(width: 38, height: 38)
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 16))
-                            .foregroundStyle(Theme.accent)
-                    }
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Verify after writing")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Theme.textPrimary)
-                        Text("Reads the drive back and compares every byte with the image.")
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(Theme.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-            .toggleStyle(.switch)
-            .tint(Theme.accent)
-            .disabled(model.phase.isBusy)
-        }
-        .themeCard()
-    }
-
     // MARK: - Destination
 
     private var destinationPanel: some View {
@@ -326,6 +437,7 @@ struct ContentView: View {
                         .padding(.vertical, 2)
                         .background(Capsule().fill(Theme.accent.opacity(0.14)))
                         .foregroundStyle(Theme.accent)
+                        .accessibilityLabel("\(model.rawTargets.count) drives")
                 }
             }
 
@@ -347,28 +459,10 @@ struct ContentView: View {
                 )
             } else {
                 ForEach(model.rawTargets) { target in
-                    selectRow(
-                        selected: model.selectedRawID == target.id,
-                        icon: "externaldrive.fill",
-                        title: target.name,
-                        subtitle: "\(target.device) • \(target.formattedSize) • \(target.bus)"
-                    ) {
-                        model.selectedRawID = target.id
-                    }
+                    driveRow(target, selected: model.selectedRawID == target.id)
                 }
 
                 if let target = model.selectedRaw {
-                    if selectedImageIsDMG {
-                        warningBox(
-                            "The .dmg file will be written as is, without decompressing it. "
-                            + "For a bootable drive, use an .iso or .img image."
-                        )
-                    }
-                    if !target.volumes.isEmpty {
-                        warningBox(
-                            "Mounted volumes: \(target.volumes.joined(separator: ", ")). They will be unmounted before writing."
-                        )
-                    }
                     warningBox(
                         "Raw write: all data on \(target.device) will be erased. "
                         + "Make sure it is not a backup or system disk."
@@ -381,39 +475,17 @@ struct ContentView: View {
     // MARK: - Footer
 
     private var footer: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             if model.phase.isBusy {
                 progressBar
             } else {
                 actionBar
             }
 
-            DisclosureGroup(isExpanded: $showLog) {
-                ScrollView {
-                    Text(model.logText.isEmpty ? "No output yet." : model.logText)
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(Theme.textSecondary)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(10)
-                }
-                .frame(height: 120)
-                .background {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Theme.fieldFill)
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(Theme.cardBorder, lineWidth: 1)
-                }
-            } label: {
-                Label("Console", systemImage: "terminal")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Theme.textSecondary)
-            }
+            console
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 16)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
         .background(.ultraThinMaterial)
         .overlay(alignment: .top) {
             Rectangle()
@@ -423,11 +495,12 @@ struct ContentView: View {
     }
 
     private var progressBar: some View {
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
                 Image(systemName: phaseSymbol)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.accent)
+                    .accessibilityHidden(true)
 
                 Text(model.statusLine)
                     .font(.system(size: 13.5, weight: .semibold))
@@ -440,21 +513,52 @@ struct ContentView: View {
                         .font(.system(size: 13, weight: .semibold, design: .monospaced))
                         .foregroundStyle(Theme.accent)
                 }
+
+                if model.canStop {
+                    Button {
+                        if model.phase == .verifying {
+                            model.stop()
+                        } else {
+                            showStopConfirm = true
+                        }
+                    } label: {
+                        Label("Stop", systemImage: "stop.fill")
+                    }
+                    .buttonStyle(QuietButtonStyle())
+                    .keyboardShortcut(".", modifiers: [.command])
+                    .help(model.phase == .verifying ? "Stop verifying (⌘.)" : "Stop writing (⌘.)")
+                }
             }
 
             if let progress = model.progress {
                 ProgressView(value: progress)
                     .progressViewStyle(.linear)
                     .tint(Theme.accent)
+                    .accessibilityLabel(model.statusLine)
             } else {
                 ProgressView()
                     .progressViewStyle(.linear)
                     .tint(Theme.accent)
+                    .accessibilityLabel(model.statusLine)
             }
 
-            Label("Do not disconnect the drive until the operation is complete.", systemImage: "exclamationmark.triangle.fill")
+            HStack {
+                Label(
+                    "Do not disconnect the drive until the operation is complete.",
+                    systemImage: "exclamationmark.triangle.fill"
+                )
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.textSecondary)
+
+                Spacer()
+
+                if let detail = model.progressDetail {
+                    Text(detail)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(Theme.textSecondary)
+                        .monospacedDigit()
+                }
+            }
         }
     }
 
@@ -462,7 +566,7 @@ struct ContentView: View {
         HStack(spacing: 12) {
             statusBadge
 
-            Spacer()
+            Spacer(minLength: 8)
 
             if model.phase != .idle {
                 Button("Reset") {
@@ -471,37 +575,123 @@ struct ContentView: View {
                 .buttonStyle(QuietButtonStyle())
             }
 
+            Toggle("Verify after writing", isOn: $model.verify)
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.textPrimary)
+                .tint(Theme.accent)
+                .fixedSize()
+                .help("Reads the drive back and compares every byte with the image (recommended).")
+
             Button {
                 startTapped()
             } label: {
-                Label("Write", systemImage: "arrow.down.to.line")
-                    .frame(minWidth: 132)
+                HStack(spacing: 8) {
+                    Label("Write", systemImage: "arrow.down.to.line")
+                    Text("⌘↩")
+                        .font(.system(size: 11, weight: .medium))
+                        .opacity(0.65)
+                }
+                .frame(minWidth: 120)
             }
             .buttonStyle(PrimaryButtonStyle())
             .keyboardShortcut(.return, modifiers: [.command])
             .disabled(!model.canStart)
+            .help(writeHelp)
+            .accessibilityLabel("Write")
+            .accessibilityHint(writeHelp)
         }
+    }
+
+    private var writeHelp: String {
+        if model.iso == nil { return "Choose an image first." }
+        if model.selectedRaw == nil { return "Select a destination drive first." }
+        return "Erase the selected drive and write the image (⌘↩)."
     }
 
     @ViewBuilder
     private var statusBadge: some View {
-        if case .done = model.phase {
+        switch model.phase {
+        case .done:
             statusPill("Completed", icon: "checkmark.circle.fill", color: Theme.success)
-        } else if case .failed = model.phase {
-            statusPill("Operation failed", icon: "exclamationmark.triangle.fill", color: Theme.danger)
-        } else if case .cancelled = model.phase {
+        case .failed(let message):
+            statusPill(message, icon: "exclamationmark.triangle.fill", color: Theme.danger)
+        case .stopped:
+            statusPill(model.statusLine, icon: "stop.circle.fill", color: Theme.warning)
+        case .cancelled:
             statusPill("Cancelled", icon: "xmark.circle", color: Theme.textSecondary)
+        default:
+            EmptyView()
         }
     }
 
     private func statusPill(_ text: String, icon: String, color: Color) -> some View {
         Label(text, systemImage: icon)
             .font(.system(size: 12, weight: .semibold))
+            .lineLimit(2)
+            .truncationMode(.tail)
             .padding(.horizontal, 11)
             .padding(.vertical, 6)
             .background(Capsule().fill(color.opacity(0.13)))
             .overlay(Capsule().strokeBorder(color.opacity(0.28), lineWidth: 1))
             .foregroundStyle(color)
+            .help(text)
+    }
+
+    private var console: some View {
+        DisclosureGroup(isExpanded: $showLog) {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(model.logText.isEmpty ? "No output yet." : model.logText)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(Theme.textSecondary)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Color.clear
+                            .frame(height: 1)
+                            .id("consoleEnd")
+                    }
+                    .padding(10)
+                }
+                .frame(height: 120)
+                .background {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Theme.fieldFill)
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(Theme.cardBorder, lineWidth: 1)
+                }
+                .overlay(alignment: .topTrailing) {
+                    Button {
+                        copyToPasteboard(model.logText)
+                    } label: {
+                        Label("Copy", systemImage: "doc.on.doc")
+                            .font(.system(size: 11))
+                    }
+                    .buttonStyle(.borderless)
+                    .padding(8)
+                    .disabled(model.logText.isEmpty)
+                    .help("Copy the console output")
+                }
+                .onChange(of: model.logText) { _, _ in
+                    proxy.scrollTo("consoleEnd", anchor: .bottom)
+                }
+                .onChange(of: showLog) { _, isShown in
+                    if isShown {
+                        DispatchQueue.main.async {
+                            proxy.scrollTo("consoleEnd", anchor: .bottom)
+                        }
+                    }
+                }
+            }
+        } label: {
+            Label("Console", systemImage: "terminal")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Theme.textSecondary)
+        }
     }
 
     private var phaseSymbol: String {
@@ -549,6 +739,12 @@ struct ContentView: View {
         return true
     }
 
+    private func copyToPasteboard(_ text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+    }
+
     private var errorBinding: Binding<Bool> {
         Binding(
             get: { model.errorMessage != nil },
@@ -562,34 +758,40 @@ struct ContentView: View {
 
     // MARK: - Components
 
-    private func selectRow(
-        selected: Bool,
-        icon: String,
-        title: String,
-        subtitle: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
+    private func driveRow(_ target: RawTarget, selected: Bool) -> some View {
+        let details = "\(target.device) • \(target.formattedSize) • \(target.bus)"
+        let volumes = target.volumeNames
+
+        return Button {
+            model.selectedRawID = target.id
+        } label: {
             HStack(spacing: 12) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 9, style: .continuous)
                         .fill(selected ? AnyShapeStyle(Theme.accentGradient) : AnyShapeStyle(Theme.fieldFill))
                         .frame(width: 36, height: 36)
-                    Image(systemName: icon)
+                    Image(systemName: target.isSDCard ? "sdcard.fill" : "externaldrive.fill")
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(selected ? Color.white : Theme.textSecondary)
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
+                    Text(target.name)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Theme.textPrimary)
                         .lineLimit(1)
-                    Text(subtitle)
+                    Text(details)
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.textSecondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
+                    if !volumes.isEmpty {
+                        Text("Volumes: \(volumes.joined(separator: ", "))")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.textSecondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
                 }
 
                 Spacer()
@@ -599,6 +801,7 @@ struct ContentView: View {
                     .foregroundStyle(selected ? Theme.accent : Theme.textSecondary.opacity(0.45))
             }
             .padding(11)
+            .contentShape(Rectangle())
             .background {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(selected ? Theme.accent.opacity(0.11) : Color.clear)
@@ -613,6 +816,12 @@ struct ContentView: View {
         }
         .buttonStyle(.plain)
         .disabled(model.phase.isBusy)
+        .accessibilityLabel(target.name)
+        .accessibilityValue(
+            volumes.isEmpty ? details : "\(details). Volumes: \(volumes.joined(separator: ", "))"
+        )
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
+        .accessibilityHint("Selects this drive as the destination.")
     }
 
     private func warningBox(_ text: String) -> some View {
@@ -620,6 +829,7 @@ struct ContentView: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.warning)
+                .accessibilityHidden(true)
             Text(text)
                 .font(.system(size: 11.5))
                 .foregroundStyle(Theme.textSecondary)
@@ -635,6 +845,31 @@ struct ContentView: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(Theme.warning.opacity(0.22), lineWidth: 1)
         }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func infoBox(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 9) {
+            Image(systemName: "info.circle.fill")
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.accent)
+                .accessibilityHidden(true)
+            Text(text)
+                .font(.system(size: 11.5))
+                .foregroundStyle(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Theme.accent.opacity(0.07))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Theme.accent.opacity(0.20), lineWidth: 1)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private func emptyState(icon: String, title: String, message: String) -> some View {
@@ -647,6 +882,7 @@ struct ContentView: View {
                     .font(.system(size: 25, weight: .light))
                     .foregroundStyle(Theme.accent)
             }
+            .accessibilityHidden(true)
             Text(title)
                 .font(.system(size: 13.5, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)

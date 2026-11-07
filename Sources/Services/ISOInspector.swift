@@ -53,7 +53,8 @@ enum ISOInspector {
             size: size,
             volumeLabel: label,
             isISO9660: isISO9660,
-            isUDF: isUDF
+            isUDF: isUDF,
+            boot: BootInspector.inspect(handle, url: url, isISO9660: isISO9660, label: label)
         )
     }
 

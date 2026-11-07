@@ -10,6 +10,7 @@ private let ioctlGetBlockCount: UInt = 0x4008_6419  // DKIOCGETBLOCKCOUNT (uint6
 enum RawWriteError: LocalizedError {
     case validation(String)
     case cancelled
+    case stopped(String)
     case failed(String)
 
     var errorDescription: String? {
@@ -18,6 +19,8 @@ enum RawWriteError: LocalizedError {
             return message
         case .cancelled:
             return "Authorization cancelled: nothing was written."
+        case .stopped(let message):
+            return message
         case .failed(let message):
             return message
         }
@@ -36,6 +39,9 @@ enum RawWriter {
         let fraction: Double?
         let phase: BurnPhase
         let log: String?
+        /// Bytes written or verified so far, and the total for the phase.
+        var processed: Int64? = nil
+        var total: Int64? = nil
     }
 
     static func write(
@@ -123,6 +129,11 @@ enum RawWriter {
             }
         } catch {
             close(fd)
+            if case RawWriteError.stopped = error {
+                // Stopped by the user: release the drive so it can be removed.
+                await Task.detached(priority: .utility) { sync() }.value
+                _ = await Shell.run("/usr/sbin/diskutil", ["eject", target.device])
+            }
             throw error
         }
 
@@ -354,6 +365,12 @@ enum RawWriter {
 
         var written: Int64 = 0
         while written < size {
+            if Task.isCancelled {
+                throw RawWriteError.stopped(
+                    "Write stopped after \(ByteCountFormatter.string(fromByteCount: written, countStyle: .file)). "
+                        + "The drive is incomplete: write it again or erase it with Disk Utility."
+                )
+            }
             let remaining = size - written
             let toRead = Int(min(Int64(rawChunkSize), remaining))
             let data = try readExactly(handle, count: toRead)
@@ -375,8 +392,17 @@ enum RawWriter {
             let fraction = size > 0
                 ? min(max(Double(written) / Double(size), 0), 1)
                 : nil
+            let processed = written
             await MainActor.run {
-                onUpdate(Update(fraction: fraction, phase: .writing, log: nil))
+                onUpdate(
+                    Update(
+                        fraction: fraction,
+                        phase: .writing,
+                        log: nil,
+                        processed: processed,
+                        total: size
+                    )
+                )
             }
         }
     }
@@ -428,6 +454,11 @@ enum RawWriter {
 
         var compared: Int64 = 0
         while compared < size {
+            if Task.isCancelled {
+                throw RawWriteError.stopped(
+                    "Verification stopped. The write completed, but the drive was not fully verified."
+                )
+            }
             let remaining = size - compared
             let chunk = Int(min(Int64(rawChunkSize), remaining))
             let aligned = (chunk + blockSize - 1) / blockSize * blockSize
@@ -454,8 +485,17 @@ enum RawWriter {
 
             compared += Int64(chunk)
             let fraction = size > 0 ? Double(compared) / Double(size) : nil
+            let processed = compared
             await MainActor.run {
-                onUpdate(Update(fraction: fraction, phase: .verifying, log: nil))
+                onUpdate(
+                    Update(
+                        fraction: fraction,
+                        phase: .verifying,
+                        log: nil,
+                        processed: processed,
+                        total: size
+                    )
+                )
             }
         }
     }
