@@ -1,4 +1,4 @@
-.PHONY: build run clean test icon
+.PHONY: build run clean test icon dmg
 
 build:
 	./build.sh
@@ -8,6 +8,9 @@ run: build
 
 test:
 	./test.sh
+
+dmg:
+	./make_dmg.sh
 
 icon:
 	./Tools/make_icon.sh

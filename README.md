@@ -1,6 +1,6 @@
 # IsoQuik
 
-**Version 1.1.0** — see [CHANGELOG.md](CHANGELOG.md).
+**Version 1.2.0** — see [CHANGELOG.md](CHANGELOG.md).
 
 A native macOS app (SwiftUI, Apple Silicon) that writes disk images to **USB drives and SD cards** in raw mode.
 
@@ -42,7 +42,8 @@ The version lives in `Resources/Info.plist`:
 - `CFBundleShortVersionString`: the user-facing version (semantic versioning, e.g. `1.1.0`);
 - `CFBundleVersion`: the build number, increased with every release.
 
-`build.sh` prints the version it builds. The app shows it in the header (hover for the
+`build.sh` prints the version it builds; `./make_dmg.sh` (or `make dmg`) builds the app and packages it as
+`build/IsoQuik-<version>.dmg`. The app shows it in the header (hover for the
 build number) and in **IsoQuik → About IsoQuik**. Record every release in `CHANGELOG.md`.
 
 ## Usage
@@ -116,6 +117,7 @@ IsoQuik/
 ├── Tests/
 │   └── SelfTest.swift           # non-destructive tests
 ├── build.sh
+├── make_dmg.sh              # builds the app and packages it as a .dmg
 ├── test.sh
 ├── CHANGELOG.md
 ├── LICENSE

@@ -2,7 +2,7 @@
 
 All notable changes to IsoQuik are listed here. Versions follow [semantic versioning](https://semver.org).
 
-## [Unreleased]
+## [1.2.0] (build 3) — 2026-11-07
 
 ### Added
 - Boot check for the selected image: partition table (MBR/GPT), El Torito boot catalog and UEFI loaders
