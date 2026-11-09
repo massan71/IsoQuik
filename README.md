@@ -6,6 +6,24 @@ A native macOS app (SwiftUI, universal: Apple silicon and Intel) that writes dis
 
 No external dependencies, no network access, no telemetry.
 
+## Install
+
+With [Homebrew](https://brew.sh):
+
+```bash
+brew install --cask massan71/tap/isoquik
+```
+
+Update with `brew upgrade --cask isoquik`. The cask lives in
+[massan71/homebrew-tap](https://github.com/massan71/homebrew-tap).
+
+Or download `IsoQuik-<version>.dmg` from the [releases](https://github.com/massan71/IsoQuik/releases),
+drag the app to **Applications** and remove the quarantine flag once (the app is not notarized):
+
+```bash
+xattr -dr com.apple.quarantine /Applications/IsoQuik.app
+```
+
 ## Requirements
 
 - macOS 14 or later (developed and built on macOS 27.2, arm64).
@@ -43,7 +61,8 @@ The version lives in `Resources/Info.plist`:
 - `CFBundleVersion`: the build number, increased with every release.
 
 `build.sh` prints the version it builds; `./make_dmg.sh` (or `make dmg`) builds the app and packages it as
-`build/IsoQuik-<version>.dmg`. The app shows it in the header (hover for the
+`build/IsoQuik-<version>.dmg`. After publishing a release, update `version` and `sha256` in the
+[Homebrew cask](https://github.com/massan71/homebrew-tap/blob/main/Casks/isoquik.rb). The app shows it in the header (hover for the
 build number) and in **IsoQuik → About IsoQuik**. Record every release in `CHANGELOG.md`.
 
 ## Usage
